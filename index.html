@@ -276,39 +276,42 @@
 
   thead th {
     background: var(--surface2);
-    padding: 10px 12px;
+    padding: 10px 14px;
     text-align: left;
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    letter-spacing: 0.1em;
-    color: var(--muted);
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: #94a3b8;
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
     cursor: pointer;
     user-select: none;
+    text-transform: uppercase;
   }
 
   thead th:hover { color: var(--text); }
 
   tbody tr {
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid rgba(31,45,69,0.8);
     transition: background 0.15s;
   }
 
-  tbody tr:hover { background: var(--surface2); }
+  tbody tr:hover { background: rgba(0,212,255,0.04); }
   tbody tr:last-child { border-bottom: none; }
 
   td {
-    padding: 10px 12px;
+    padding: 11px 14px;
     white-space: nowrap;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    color: var(--text);
   }
 
-  .td-player { color: var(--accent); font-weight: 700; }
-  .td-num { text-align: right; color: var(--text); }
-  .td-neg { color: var(--critical); }
-  .td-pos { color: var(--low); }
+  .td-player { color: var(--accent); font-weight: 600; font-size: 0.85rem; }
+  .td-num { text-align: right; color: #e2e8f0; font-family: var(--font-mono); font-size: 0.82rem; letter-spacing: 0.02em; }
+  .td-neg { color: #ff6b6b; font-weight: 500; }
+  .td-pos { color: #51cf66; font-weight: 500; }
 
   /* ── RISK BADGE ── */
   .risk-badge {
