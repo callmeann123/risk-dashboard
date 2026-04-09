@@ -575,7 +575,7 @@ function aggregate(data){
     const key=`${r.player_id}||${r.GameType}`;
     if(!map[key]) map[key]={player_id:r.player_id,GameType:r.GameType,bets:[],validBets:[],winlosses:[],times:[],timeDiffSecs:[],tableIds:new Set(),hourCounts:new Array(24).fill(0)};
     const bet=parseFloat(r.Bet_Amount)||0;
-    const validBet=parseFloat(r.Valid_Bet_Amount)||parseFloat(r.Bet_Amount)||0;
+    const validBet=parseFloat(r.Valid_Bet_Amount)||0;
     const wl=parseFloat(r.WinLoss)||0;
     map[key].bets.push(bet);
     map[key].validBets.push(validBet);
