@@ -610,16 +610,18 @@ function aggregate(data){
     const baseRTP=baseline?parseFloat(baseline.RTP)||0:0;
     const baseAvgBet=baseline?parseFloat(baseline.Avg_Bet)||0:0;
 
-    let score=0;
-    if(rtp>T.rtp) score+=20;
-    if(betCV<T.betcv) score+=15;
-    if(timeCV<T.timecv&&timeCV>0) score+=15;
-    if(avgBet>T.avgbet) score+=10;
-    if(tableCount>T.tablecount) score+=10;
-    if(count>T.betcount) score+=10;
-    if(totalBet>0&&Math.abs(totalWL/totalBet)>T.wlratio) score+=20;
-    if(baseline&&rtp>baseRTP+2) score+=5;
-    if(baseline&&baseAvgBet>0&&avgBet>baseAvgBet*1.5) score+=5;
+    let baseScore=0;
+    if(rtp>T.rtp) baseScore+=20;
+    if(betCV<T.betcv) baseScore+=15;
+    if(timeCV<T.timecv&&timeCV>0) baseScore+=15;
+    if(avgBet>T.avgbet) baseScore+=10;
+    if(tableCount>T.tablecount) baseScore+=10;
+    if(count>T.betcount) baseScore+=10;
+    if(totalBet>0&&Math.abs(totalWL/totalBet)>T.wlratio) baseScore+=20;
+    let bonusScore=0;
+    if(baseline&&rtp>baseRTP+2) bonusScore+=5;
+    if(baseline&&baseAvgBet>0&&avgBet>baseAvgBet*1.5) bonusScore+=5;
+    const score=baseScore+bonusScore;
 
     const flag=score>T.critical?'CRITICAL':score>T.high?'HIGH':score>T.medium?'MEDIUM':'LOW';
 
@@ -638,7 +640,7 @@ function aggregate(data){
     if(totalWL<-totalBet*.5) patterns.push('Loss Chasing');
     if(rtp>98) patterns.push('Near-Perfect RTP');
 
-    return {player_id:g.player_id,GameType:g.GameType,totalBet,totalValidBet,totalWL,count,avgBet,stdBet,betCV,rtp,avgTime,stdTime,timeCV,onlineHrs,tableCount,score,flag,riskType,patterns:patterns.join(', '),hourCounts:g.hourCounts,times:g.times,bets:g.bets};
+    return {player_id:g.player_id,GameType:g.GameType,totalBet,totalValidBet,totalWL,count,avgBet,stdBet,betCV,rtp,avgTime,stdTime,timeCV,onlineHrs,tableCount,score,baseScore,bonusScore,flag,riskType,patterns:patterns.join(', '),hourCounts:g.hourCounts,times:g.times,bets:g.bets};
   }).sort((a,b)=>b.score-a.score);
 }
 
@@ -840,7 +842,7 @@ const COLS=[
   {key:'betCV',label:'Bet CV',num:true,fmt:v=>v.toFixed(3)},
   {key:'avgTime',label:'Avg Time(s)',num:true,fmt:v=>v.toFixed(1)},
   {key:'tableCount',label:'Tables',num:true},
-  {key:'score',label:'Score',num:true},
+  {key:'score',label:'Score',num:true,fmt:v=>v},
   {key:'flag',label:'Risk Flag',badge:true},
   {key:'riskType',label:'Risk Type'},
   {key:'patterns',label:'Bet Pattern'},
@@ -865,6 +867,7 @@ function renderTable(search){
     <tr onclick="openPlayerModal('${r.player_id}','${r.GameType}')">${COLS.map(c=>{
       let val=r[c.key];
       if(c.badge) return `<td><span class="risk-badge risk-${val}">${val}</span></td>`;
+      if(c.key==='score') return `<td class="td-num" style="white-space:nowrap">${r.baseScore}<span style="color:var(--accent);font-size:.72rem;margin-left:4px" title="Base: ${r.baseScore} + Baseline bonus: +${r.bonusScore}">+${r.bonusScore}★</span></td>`;
       if(c.fmt) val=c.fmt(val);
       let cls=c.cls||(c.num?'td-num':'');
       if(c.signed) cls+=r[c.key]>=0?' td-pos':' td-neg';
