@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Risk Control Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1f2d45;
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --critical: #ff3b5c;
+    --high: #ff8c42;
+    --medium: #ffd166;
+    --low: #06d6a0;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --font-mono: 'Space Mono', monospace;
+    --font-body: 'DM Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 100;
+    backdrop-filter: blur(12px);
+  }
+
+  .logo {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .logo span { color: var(--muted); }
+
+  .header-right { display: flex; align-items: center; gap: 1rem; }
+
+  /* ── PERIOD TABS ── */
+  .period-tabs {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+  }
+
+  .period-tab {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    padding: 6px 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    color: var(--muted);
+    transition: all 0.2s;
+  }
+
+  .period-tab.active {
+    background: var(--accent);
+    color: #000;
+    font-weight: 700;
+  }
+
+  .period-tab:hover:not(.active) { color: var(--text); }
+
+  /* ── DATE PICKER ── */
+  .date-picker {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  .date-picker input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    outline: none;
+  }
+
+  .date-picker input:focus { border-color: var(--accent); }
+
+  /* ── SYNC BUTTON ── */
+  .sync-btn {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .sync-btn:hover { background: var(--accent); color: #000; }
+  .sync-btn.loading { opacity: 0.5; pointer-events: none; }
+
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── MAIN LAYOUT ── */
+  main { padding: 1.5rem 2rem; max-width: 1600px; margin: 0 auto; }
+
+  /* ── KPI CARDS ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent-color, var(--accent));
+  }
+
+  .kpi-card:hover { border-color: var(--accent-color, var(--accent)); }
+
+  .kpi-label {
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    margin-bottom: 0.5rem;
+  }
+
+  .kpi-value {
+    font-family: var(--font-mono);
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--accent-color, var(--text));
+    line-height: 1;
+    margin-bottom: 0.25rem;
+  }
+
+  .kpi-sub { font-size: 0.75rem; color: var(--muted); }
+
+  /* ── CHART + TABLE GRID ── */
+  .content-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+
+  .card-title {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .card-title::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .chart-wrap { position: relative; height: 220px; }
+
+  /* ── FULL WIDTH CHART ── */
+  .full-chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  .full-chart-wrap { position: relative; height: 200px; }
+
+  /* ── TABLE ── */
+  .table-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+  }
+
+  .table-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .table-search {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    outline: none;
+    width: 200px;
+  }
+
+  .table-search:focus { border-color: var(--accent); }
+
+  .table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+  }
+
+  thead th {
+    background: var(--surface2);
+    padding: 10px 12px;
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  thead th:hover { color: var(--text); }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+
+  tbody tr:hover { background: var(--surface2); }
+  tbody tr:last-child { border-bottom: none; }
+
+  td {
+    padding: 10px 12px;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+  }
+
+  .td-player { color: var(--accent); font-weight: 700; }
+  .td-num { text-align: right; color: var(--text); }
+  .td-neg { color: var(--critical); }
+  .td-pos { color: var(--low); }
+
+  /* ── RISK BADGE ── */
+  .risk-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 0.65rem;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+
+  .risk-CRITICAL { background: rgba(255,59,92,0.15); color: var(--critical); border: 1px solid rgba(255,59,92,0.3); }
+  .risk-HIGH     { background: rgba(255,140,66,0.15); color: var(--high);     border: 1px solid rgba(255,140,66,0.3); }
+  .risk-MEDIUM   { background: rgba(255,209,102,0.15); color: var(--medium);  border: 1px solid rgba(255,209,102,0.3); }
+  .risk-LOW      { background: rgba(6,214,160,0.15);  color: var(--low);      border: 1px solid rgba(6,214,160,0.3); }
+
+  /* ── SETUP PANEL ── */
+  .setup-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    text-align: center;
+    margin: 2rem auto;
+    max-width: 560px;
+  }
+
+  .setup-panel h2 {
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+
+  .setup-panel p { color: var(--muted); font-size: 0.85rem; margin-bottom: 1.5rem; line-height: 1.6; }
+
+  .setup-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    outline: none;
+    margin-bottom: 1rem;
+  }
+
+  .setup-input:focus { border-color: var(--accent); }
+
+  .setup-btn {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 10px 28px;
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    transition: opacity 0.2s;
+  }
+
+  .setup-btn:hover { opacity: 0.85; }
+
+  .setup-note {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 1rem;
+    line-height: 1.6;
+  }
+
+  .setup-note code {
+    background: var(--surface2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--accent2);
+    font-family: var(--font-mono);
+  }
+
+  /* ── STATUS BAR ── */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 2rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-family: var(--font-mono);
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--low);
+    animation: pulse 2s infinite;
+  }
+
+  .status-dot.error { background: var(--critical); animation: none; }
+  .status-dot.loading { background: var(--medium); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── EMPTY STATE ── */
+  .empty { text-align: center; padding: 3rem; color: var(--muted); font-size: 0.85rem; }
+
+  /* ── PAGINATION ── */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: var(--font-mono);
+  }
+
+  .page-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    transition: all 0.15s;
+  }
+
+  .page-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .page-btn:disabled { opacity: 0.3; pointer-events: none; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">RISK<span>/</span>CONTROL <span>// DASHBOARD</span></div>
+  <div class="header-right">
+    <div class="period-tabs">
+      <button class="period-tab active" data-period="day">DAY</button>
+      <button class="period-tab" data-period="week">WEEK</button>
+      <button class="period-tab" data-period="month">MONTH</button>
+    </div>
+    <div class="date-picker">
+      <span>FROM</span>
+      <input type="date" id="dateFrom">
+      <span>TO</span>
+      <input type="date" id="dateTo">
+    </div>
+    <button class="sync-btn" id="syncBtn">
+      <svg id="syncIcon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M23 4v6h-6M1 20v-6h6"/>
+        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+      </svg>
+      SYNC
+    </button>
+  </div>
+</header>
+
+<div class="status-bar">
+  <div class="status-dot" id="statusDot"></div>
+  <span id="statusText">Ready — configure Google Sheets URL to begin</span>
+  <span style="margin-left:auto" id="lastSync"></span>
+</div>
+
+<main id="mainContent">
+  <!-- Setup panel shown initially -->
+  <div class="setup-panel" id="setupPanel">
+    <h2>// CONNECT DATA SOURCE</h2>
+    <p>Paste your Google Sheets published CSV URL below.<br>
+    The sheet will auto-sync when you click SYNC.</p>
+    <input class="setup-input" id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv" />
+    <br>
+    <button class="setup-btn" onclick="saveAndSync()">CONNECT & SYNC</button>
+    <div class="setup-note">
+      In Google Sheets: <code>File → Share → Publish to web</code><br>
+      Select your <code>Raw_Data</code> sheet → <code>CSV</code> → <code>Publish</code><br>
+      Copy the URL and paste above.
+    </div>
+  </div>
+
+  <!-- Dashboard (hidden until data loaded) -->
+  <div id="dashboard" style="display:none">
+    <!-- KPI Cards -->
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- Bet Trend Chart (full width) -->
+    <div class="full-chart-card">
+      <div class="card-title">BETTING TREND</div>
+      <div class="full-chart-wrap"><canvas id="trendChart"></canvas></div>
+    </div>
+
+    <!-- Charts row -->
+    <div class="content-grid">
+      <div class="chart-card">
+        <div class="card-title">RISK DISTRIBUTION</div>
+        <div class="chart-wrap"><canvas id="riskChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="card-title">TOP PLAYERS BY TOTAL BET</div>
+        <div class="chart-wrap"><canvas id="playerChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="table-card">
+      <div class="table-header">
+        <div class="card-title" style="margin:0">PLAYER RISK TABLE</div>
+        <input class="table-search" id="tableSearch" placeholder="Search player...">
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead id="tableHead"></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'riskctl_sheet_url';
+let rawData = [];
+let filteredData = [];
+let aggregated = [];
+let charts = {};
+let currentPeriod = 'day';
+let currentPage = 1;
+const PAGE_SIZE = 20;
+
+// ── INIT ────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  // Set default dates
+  const today = new Date();
+  const monthAgo = new Date(today); monthAgo.setMonth(monthAgo.getMonth() - 1);
+  document.getElementById('dateFrom').value = fmt(monthAgo);
+  document.getElementById('dateTo').value = fmt(today);
+
+  // Load saved URL
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    document.getElementById('sheetUrl').value = saved;
+    loadData(saved);
+  }
+
+  // Period tabs
+  document.querySelectorAll('.period-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.period-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentPeriod = tab.dataset.period;
+      updateDateRange(currentPeriod);
+      renderAll();
+    });
+  });
+
+  // Sync button
+  document.getElementById('syncBtn').addEventListener('click', () => {
+    const url = document.getElementById('sheetUrl').value.trim();
+    if (url) { localStorage.setItem(STORAGE_KEY, url); loadData(url); }
+  });
+
+  // Date change
+  ['dateFrom','dateTo'].forEach(id => {
+    document.getElementById(id).addEventListener('change', renderAll);
+  });
+
+  // Search
+  document.getElementById('tableSearch').addEventListener('input', e => {
+    currentPage = 1;
+    renderTable(e.target.value);
+  });
+});
+
+function fmt(d) {
+  return d.toISOString().split('T')[0];
+}
+
+function updateDateRange(period) {
+  const today = new Date();
+  const from = new Date(today);
+  if (period === 'day') from.setDate(from.getDate() - 1);
+  else if (period === 'week') from.setDate(from.getDate() - 7);
+  else from.setMonth(from.getMonth() - 1);
+  document.getElementById('dateFrom').value = fmt(from);
+  document.getElementById('dateTo').value = fmt(today);
+}
+
+// ── LOAD DATA ────────────────────────────────────────────────────────────────
+function saveAndSync() {
+  const url = document.getElementById('sheetUrl').value.trim();
+  if (!url) return;
+  localStorage.setItem(STORAGE_KEY, url);
+  loadData(url);
+}
+
+function setStatus(type, text) {
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot' + (type === 'error' ? ' error' : type === 'loading' ? ' loading' : '');
+  document.getElementById('statusText').textContent = text;
+}
+
+async function loadData(url) {
+  setStatus('loading', 'Syncing from Google Sheets...');
+  const btn = document.getElementById('syncBtn');
+  btn.classList.add('loading');
+  document.getElementById('syncIcon').classList.add('spin');
+
+  try {
+    // Try multiple CORS proxies in sequence
+    const proxies = [
+      u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+      u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+      u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    ];
+
+    let csv = null;
+    for (let i = 0; i < proxies.length; i++) {
+      try {
+        setStatus('loading', `Syncing... (trying proxy ${i+1}/${proxies.length})`);
+        const proxyUrl = proxies[i](url);
+        const res = await fetch(proxyUrl);
+        if (!res.ok) continue;
+        let text;
+        if (proxyUrl.includes('allorigins')) {
+          const json = await res.json();
+          text = json.contents;
+        } else {
+          text = await res.text();
+        }
+        // Validate it looks like CSV with our expected columns
+        if (text && text.includes('player_id')) { csv = text; break; }
+      } catch(e) { continue; }
+    }
+
+    if (!csv) throw new Error('All proxies failed');
+
+    Papa.parse(csv, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        rawData = results.data.filter(r => r.player_id && r.player_id.trim());
+        document.getElementById('setupPanel').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+        document.getElementById('lastSync').textContent = 'Last sync: ' + new Date().toLocaleTimeString();
+        setStatus('ok', `Loaded ${rawData.length.toLocaleString()} records`);
+        renderAll();
+      },
+      error: () => setStatus('error', 'Failed to parse CSV — check column headers')
+    });
+  } catch(e) {
+    setStatus('error', 'All proxies failed — see instructions below');
+    document.getElementById('setupPanel').style.display = 'block';
+    document.getElementById('dashboard').style.display = 'none';
+  } finally {
+    btn.classList.remove('loading');
+    document.getElementById('syncIcon').classList.remove('spin');
+  }
+}
+
+// ── FILTER BY DATE ───────────────────────────────────────────────────────────
+function getDateFiltered() {
+  const from = document.getElementById('dateFrom').value;
+  const to = document.getElementById('dateTo').value;
+  if (!from && !to) return rawData;
+
+  return rawData.filter(r => {
+    if (!r.Bet_Time) return true;
+    const d = r.Bet_Time.substring(0, 10);
+    return (!from || d >= from) && (!to || d <= to);
+  });
+}
+
+// ── AGGREGATE ────────────────────────────────────────────────────────────────
+function aggregate(data) {
+  const map = {};
+  data.forEach(r => {
+    const key = `${r.player_id}||${r.GameType}`;
+    if (!map[key]) {
+      map[key] = {
+        player_id: r.player_id,
+        GameType: r.GameType,
+        bets: [], winlosses: [], times: []
+      };
+    }
+    const bet = parseFloat(r.Bet_Amount) || 0;
+    const wl  = parseFloat(r.WinLoss) || 0;
+    map[key].bets.push(bet);
+    map[key].winlosses.push(wl);
+    if (r.Bet_Time) map[key].times.push(r.Bet_Time);
+  });
+
+  return Object.values(map).map(g => {
+    const totalBet = g.bets.reduce((a,b)=>a+b,0);
+    const totalWL  = g.winlosses.reduce((a,b)=>a+b,0);
+    const count    = g.bets.length;
+    const avgBet   = totalBet / count;
+    const stdBet   = std(g.bets);
+    const betCV    = avgBet > 0 ? stdBet / avgBet : 0;
+    const rtp      = totalBet > 0 ? (totalBet + totalWL) / totalBet * 100 : 0;
+
+    // Time analysis
+    g.times.sort();
+    const timeDiffs = [];
+    for (let i = 1; i < g.times.length; i++) {
+      const diff = (new Date(g.times[i]) - new Date(g.times[i-1])) / 1000;
+      if (diff <= 300) timeDiffs.push(diff);
+    }
+    const avgTime = timeDiffs.length ? mean(timeDiffs) : 0;
+    const stdTime = timeDiffs.length > 1 ? std(timeDiffs) : 0;
+    const timeCV  = avgTime > 0 ? stdTime / avgTime : 0;
+
+    // Online time
+    let onlineHrs = 0;
+    if (g.times.length >= 2) {
+      onlineHrs = (new Date(g.times[g.times.length-1]) - new Date(g.times[0])) / 3600000;
+    }
+
+    // Risk score
+    let score = 0;
+    if (rtp > 95) score += 20;
+    if (betCV < 0.1) score += 15;
+    if (timeCV < 0.1 && timeCV > 0) score += 15;
+    if (avgBet > 5000) score += 10;
+    if (count > 200) score += 10;
+    if (totalBet > 0 && Math.abs(totalWL / totalBet) > 0.3) score += 20;
+
+    const flag = score > 75 ? 'CRITICAL' : score > 55 ? 'HIGH' : score > 30 ? 'MEDIUM' : 'LOW';
+
+    // Risk type
+    let riskType = 'Normal';
+    if (rtp > 95 && betCV < 0.1) riskType = 'Bonus Abuse';
+    else if (avgTime < 60 && timeCV < 0.1 && timeCV > 0) riskType = 'Bot/Automation';
+    else if (avgBet > 5000 && betCV < 0.15 && Math.abs(totalWL) < totalBet * 0.05) riskType = 'Money Laundering';
+    else if (totalWL < -totalBet * 0.5) riskType = 'Problem Gambling';
+
+    // Bet pattern
+    const patterns = [];
+    if (betCV < 0.05) patterns.push('Flat Betting');
+    if (avgTime > 0 && avgTime < 60) patterns.push('Rapid Fire');
+    if (avgBet > 5000) patterns.push('High Roller');
+    if (totalWL < -totalBet * 0.5) patterns.push('Loss Chasing');
+    if (rtp > 98) patterns.push('Near-Perfect RTP');
+
+    return {
+      player_id: g.player_id, GameType: g.GameType,
+      totalBet, totalWL, count, avgBet, stdBet, betCV,
+      rtp, avgTime, stdTime, timeCV, onlineHrs, score, flag, riskType,
+      patterns: patterns.join(', ')
+    };
+  }).sort((a,b) => b.score - a.score);
+}
+
+function mean(arr) { return arr.reduce((a,b)=>a+b,0) / arr.length; }
+function std(arr) {
+  if (arr.length < 2) return 0;
+  const m = mean(arr);
+  return Math.sqrt(arr.reduce((a,b)=>a+(b-m)**2,0)/(arr.length-1));
+}
+
+// ── RENDER ALL ───────────────────────────────────────────────────────────────
+function renderAll() {
+  filteredData = getDateFiltered();
+  aggregated = aggregate(filteredData);
+  renderKPIs();
+  renderTrendChart();
+  renderRiskChart();
+  renderPlayerChart();
+  renderTable('');
+}
+
+// ── KPIs ─────────────────────────────────────────────────────────────────────
+function renderKPIs() {
+  const totalBet = aggregated.reduce((a,r)=>a+r.totalBet,0);
+  const totalWL  = aggregated.reduce((a,r)=>a+r.totalWL,0);
+  const players  = new Set(aggregated.map(r=>r.player_id)).size;
+  const critical = aggregated.filter(r=>r.flag==='CRITICAL').length;
+  const high     = aggregated.filter(r=>r.flag==='HIGH').length;
+
+  const cards = [
+    { label:'Total Players', value: players, sub: 'unique IDs', color:'var(--accent)' },
+    { label:'Total Bet', value: '$'+fmt2(totalBet), sub: 'aggregate', color:'var(--accent)' },
+    { label:'Total Win/Loss', value: (totalWL>=0?'+':'')+fmt2(totalWL),
+      sub: 'net P&L', color: totalWL>=0?'var(--low)':'var(--critical)' },
+    { label:'Critical Cases', value: critical, sub: 'require action', color:'var(--critical)' },
+    { label:'High Risk', value: high, sub: 'needs review', color:'var(--high)' },
+  ];
+
+  document.getElementById('kpiGrid').innerHTML = cards.map(c => `
+    <div class="kpi-card" style="--accent-color:${c.color}">
+      <div class="kpi-label">${c.label}</div>
+      <div class="kpi-value">${c.value}</div>
+      <div class="kpi-sub">${c.sub}</div>
+    </div>`).join('');
+}
+
+function fmt2(n) {
+  if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(1)+'M';
+  if (Math.abs(n) >= 1e3) return (n/1e3).toFixed(1)+'K';
+  return n.toFixed(0);
+}
+
+// ── TREND CHART ──────────────────────────────────────────────────────────────
+function renderTrendChart() {
+  // Group by date
+  const byDate = {};
+  filteredData.forEach(r => {
+    if (!r.Bet_Time) return;
+    let key;
+    const d = new Date(r.Bet_Time);
+    if (currentPeriod === 'day') key = r.Bet_Time.substring(0,13)+':00'; // by hour
+    else if (currentPeriod === 'week') key = r.Bet_Time.substring(0,10); // by day
+    else key = r.Bet_Time.substring(0,7); // by month... use week
+    // Always use day for month view
+    key = r.Bet_Time.substring(0,10);
+
+    if (!byDate[key]) byDate[key] = { bet: 0, wl: 0 };
+    byDate[key].bet += parseFloat(r.Bet_Amount)||0;
+    byDate[key].wl  += parseFloat(r.WinLoss)||0;
+  });
+
+  const labels = Object.keys(byDate).sort();
+  const bets = labels.map(l => byDate[l].bet);
+  const wls  = labels.map(l => byDate[l].wl);
+
+  if (charts.trend) charts.trend.destroy();
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  charts.trend = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Total Bet', data: bets, backgroundColor: 'rgba(0,212,255,0.3)', borderColor: '#00d4ff', borderWidth: 1, borderRadius: 2 },
+        { label: 'Win/Loss', data: wls, backgroundColor: wls.map(v => v>=0?'rgba(6,214,160,0.4)':'rgba(255,59,92,0.4)'), borderColor: wls.map(v=>v>=0?'#06d6a0':'#ff3b5c'), borderWidth: 1, borderRadius: 2, type: 'bar' }
+      ]
+    },
+    options: chartOpts(true)
+  });
+}
+
+// ── RISK CHART ────────────────────────────────────────────────────────────────
+function renderRiskChart() {
+  const counts = { CRITICAL:0, HIGH:0, MEDIUM:0, LOW:0 };
+  aggregated.forEach(r => counts[r.flag]++);
+
+  if (charts.risk) charts.risk.destroy();
+  const ctx = document.getElementById('riskChart').getContext('2d');
+  charts.risk = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['CRITICAL','HIGH','MEDIUM','LOW'],
+      datasets: [{
+        data: [counts.CRITICAL, counts.HIGH, counts.MEDIUM, counts.LOW],
+        backgroundColor: ['rgba(255,59,92,0.8)','rgba(255,140,66,0.8)','rgba(255,209,102,0.8)','rgba(6,214,160,0.8)'],
+        borderColor: ['#ff3b5c','#ff8c42','#ffd166','#06d6a0'],
+        borderWidth: 1,
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position:'right', labels: { color:'#64748b', font:{ family:'Space Mono', size:10 }, padding:12, boxWidth:10 } },
+        tooltip: { backgroundColor:'#111827', borderColor:'#1f2d45', borderWidth:1, titleFont:{family:'Space Mono'}, bodyFont:{family:'Space Mono'} }
+      },
+      cutout: '65%'
+    }
+  });
+}
+
+// ── PLAYER CHART ──────────────────────────────────────────────────────────────
+function renderPlayerChart() {
+  const byPlayer = {};
+  aggregated.forEach(r => {
+    if (!byPlayer[r.player_id]) byPlayer[r.player_id] = 0;
+    byPlayer[r.player_id] += r.totalBet;
+  });
+
+  const sorted = Object.entries(byPlayer).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const labels = sorted.map(([id]) => id);
+  const vals   = sorted.map(([,v]) => v);
+
+  if (charts.player) charts.player.destroy();
+  const ctx = document.getElementById('playerChart').getContext('2d');
+  charts.player = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Total Bet',
+        data: vals,
+        backgroundColor: 'rgba(255,107,53,0.5)',
+        borderColor: '#ff6b35',
+        borderWidth: 1,
+        borderRadius: 3
+      }]
+    },
+    options: { ...chartOpts(false), indexAxis: 'y' }
+  });
+}
+
+function chartOpts(legend) {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: legend, labels: { color:'#64748b', font:{ family:'Space Mono', size:10 }, boxWidth:10 } },
+      tooltip: { backgroundColor:'#111827', borderColor:'#1f2d45', borderWidth:1, titleFont:{family:'Space Mono',size:10}, bodyFont:{family:'Space Mono',size:10} }
+    },
+    scales: {
+      x: { grid:{ color:'rgba(31,45,69,0.6)' }, ticks:{ color:'#64748b', font:{family:'Space Mono',size:9} } },
+      y: { grid:{ color:'rgba(31,45,69,0.6)' }, ticks:{ color:'#64748b', font:{family:'Space Mono',size:9} } }
+    }
+  };
+}
+
+// ── TABLE ────────────────────────────────────────────────────────────────────
+const COLS = [
+  { key:'player_id', label:'PLAYER', cls:'td-player' },
+  { key:'GameType',  label:'GAME' },
+  { key:'totalBet',  label:'TOTAL BET',  num:true, fmt: v=>'$'+v.toLocaleString('en',{maximumFractionDigits:0}) },
+  { key:'totalWL',   label:'WIN/LOSS',   num:true, fmt: v=>(v>=0?'+':'')+v.toLocaleString('en',{maximumFractionDigits:0}), signed:true },
+  { key:'count',     label:'BET COUNT',  num:true, fmt: v=>v.toLocaleString() },
+  { key:'rtp',       label:'RTP%',       num:true, fmt: v=>v.toFixed(2)+'%' },
+  { key:'avgBet',    label:'AVG BET',    num:true, fmt: v=>'$'+v.toLocaleString('en',{maximumFractionDigits:0}) },
+  { key:'betCV',     label:'BET CV',     num:true, fmt: v=>v.toFixed(3) },
+  { key:'avgTime',   label:'AVG TIME(s)',num:true, fmt: v=>v.toFixed(1) },
+  { key:'score',     label:'SCORE',      num:true, fmt: v=>v },
+  { key:'flag',      label:'RISK FLAG',  badge:true },
+  { key:'riskType',  label:'RISK TYPE' },
+  { key:'patterns',  label:'BET PATTERN' },
+];
+
+let sortKey = 'score', sortDir = -1;
+
+function renderTable(search) {
+  const q = (search||'').toLowerCase();
+  let rows = aggregated.filter(r =>
+    !q || r.player_id.toLowerCase().includes(q) || r.GameType.toLowerCase().includes(q) || r.riskType.toLowerCase().includes(q)
+  );
+
+  rows.sort((a,b) => {
+    const av = a[sortKey], bv = b[sortKey];
+    return typeof av === 'string' ? av.localeCompare(bv)*sortDir : (av-bv)*sortDir;
+  });
+
+  const total = rows.length;
+  const start = (currentPage-1)*PAGE_SIZE;
+  const page  = rows.slice(start, start+PAGE_SIZE);
+
+  // Head
+  document.getElementById('tableHead').innerHTML = `<tr>${COLS.map(c=>`
+    <th onclick="sortBy('${c.key}')" title="Sort by ${c.label}">
+      ${c.label}${sortKey===c.key ? (sortDir>0?' ▲':' ▼') : ''}
+    </th>`).join('')}</tr>`;
+
+  // Body
+  if (!page.length) {
+    document.getElementById('tableBody').innerHTML = `<tr><td colspan="${COLS.length}" class="empty">No records found</td></tr>`;
+  } else {
+    document.getElementById('tableBody').innerHTML = page.map(r => `<tr>${COLS.map(c => {
+      let val = r[c.key];
+      if (c.badge) return `<td><span class="risk-badge risk-${val}">${val}</span></td>`;
+      if (c.fmt) val = c.fmt(val);
+      let cls = c.cls || (c.num ? 'td-num' : '');
+      if (c.signed) cls += r[c.key]>=0 ? ' td-pos' : ' td-neg';
+      return `<td class="${cls}">${val??''}</td>`;
+    }).join('')}</tr>`).join('');
+  }
+
+  // Pagination
+  const pages = Math.ceil(total/PAGE_SIZE);
+  document.getElementById('pagination').innerHTML = `
+    <span>${total} records</span>
+    <button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage<=1?'disabled':''}>◀</button>
+    <span>${currentPage} / ${pages||1}</span>
+    <button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage>=pages?'disabled':''}>▶</button>`;
+}
+
+function sortBy(key) {
+  if (sortKey === key) sortDir *= -1;
+  else { sortKey = key; sortDir = -1; }
+  renderTable(document.getElementById('tableSearch').value);
+}
+
+function goPage(p) {
+  currentPage = p;
+  renderTable(document.getElementById('tableSearch').value);
+}
+</script>
+</body>
+</html>
