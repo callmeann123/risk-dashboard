@@ -179,6 +179,7 @@ td{padding:11px 20px;white-space:nowrap;font-family:var(--font-body);font-size:.
       <option value="300">5 min</option>
       <option value="600">10 min</option>
     </select>
+    <button class="icon-btn" onclick="shareLink()">🔗 SHARE</button>
     <button class="icon-btn" onclick="exportCSV()">⬇ CSV</button>
     <button class="icon-btn" onclick="exportPDF()">⬇ PDF</button>
     <button class="icon-btn" onclick="toggleSettings()">⚙ SETTINGS</button>
@@ -410,9 +411,17 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('dateFrom').value=fmt(monthAgo);
   document.getElementById('dateTo').value=fmt(today);
 
-  const saved=localStorage.getItem(STORAGE_KEY);
-  const saved2=localStorage.getItem(STORAGE_KEY2)||DEFAULT_RESULT_URL;
+  // Read URL params first (shareable links)
+  const params=new URLSearchParams(window.location.search);
+  const paramRaw=params.get('raw');
+  const paramResult=params.get('result');
+
+  const saved=paramRaw||localStorage.getItem(STORAGE_KEY);
+  const saved2=paramResult||localStorage.getItem(STORAGE_KEY2)||DEFAULT_RESULT_URL;
+
   if(saved){
+    localStorage.setItem(STORAGE_KEY,saved);
+    localStorage.setItem(STORAGE_KEY2,saved2);
     document.getElementById('sheetUrl').value=saved;
     document.getElementById('resultUrl').value=saved2;
     document.getElementById('s_rawUrl').value=saved;
@@ -1015,6 +1024,21 @@ function requestNotif(){
 }
 
 // ── EXPORT ────────────────────────────────────────────────────────────────────
+function shareLink(){
+  const url=localStorage.getItem(STORAGE_KEY)||'';
+  const url2=localStorage.getItem(STORAGE_KEY2)||'';
+  if(!url){setStatus('error','No data source connected');return;}
+  const shareUrl=`${location.origin}${location.pathname}?raw=${encodeURIComponent(url)}${url2?'&result='+encodeURIComponent(url2):''}`;
+  navigator.clipboard.writeText(shareUrl).then(()=>{
+    showNotif('Share link copied to clipboard!');
+    document.getElementById('notifText').textContent='Link copied! Share it with your team.';
+    document.getElementById('notifPopup').querySelector('.notif-title').textContent='🔗 LINK COPIED';
+    document.getElementById('notifPopup').querySelector('.notif-title').style.color='var(--low)';
+  }).catch(()=>{
+    prompt('Copy this link:',shareUrl);
+  });
+}
+
 function exportCSV(){
   const headers=COLS.map(c=>c.label).join(',');
   const rows=aggregated.map(r=>COLS.map(c=>{
