@@ -759,7 +759,8 @@ function aggregate(data) {
       map[key] = {
         player_id: r.player_id,
         GameType: r.GameType,
-        bets: [], winlosses: [], times: []
+        bets: [], winlosses: [], times: [],
+        timeDiffSecs: [], tableIds: new Set()
       };
     }
     const bet = parseFloat(r.Bet_Amount) || 0;
@@ -767,51 +768,52 @@ function aggregate(data) {
     map[key].bets.push(bet);
     map[key].winlosses.push(wl);
     if (r.Bet_Time) map[key].times.push(r.Bet_Time);
+    // Use pre-calculated Time_Diff_Sec from Raw_Data
+    const tds = parseFloat(r.Time_Diff_Sec);
+    if (!isNaN(tds) && tds > 0 && tds <= 300) map[key].timeDiffSecs.push(tds);
+    // table_id for distinct count
+    if (r.table_id && r.table_id.trim()) map[key].tableIds.add(r.table_id.trim());
   });
 
   return Object.values(map).map(g => {
-    const totalBet = g.bets.reduce((a,b)=>a+b,0);
-    const totalWL  = g.winlosses.reduce((a,b)=>a+b,0);
-    const count    = g.bets.length;
-    const avgBet   = totalBet / count;
-    const stdBet   = std(g.bets);
-    const betCV    = avgBet > 0 ? stdBet / avgBet : 0;
-    const rtp      = totalBet > 0 ? (totalBet + totalWL) / totalBet * 100 : 0;
+    const totalBet   = g.bets.reduce((a,b)=>a+b,0);
+    const totalWL    = g.winlosses.reduce((a,b)=>a+b,0);
+    const count      = g.bets.length;
+    const avgBet     = totalBet / count;
+    const stdBet     = std(g.bets);
+    const betCV      = avgBet > 0 ? stdBet / avgBet : 0;
+    const rtp        = totalBet > 0 ? (totalBet + totalWL) / totalBet * 100 : 0;
+    const tableCount = g.tableIds.size;
 
-    // Time analysis
-    g.times.sort();
-    const timeDiffs = [];
-    for (let i = 1; i < g.times.length; i++) {
-      const diff = (new Date(g.times[i]) - new Date(g.times[i-1])) / 1000;
-      if (diff <= 300) timeDiffs.push(diff);
-    }
-    const avgTime = timeDiffs.length ? mean(timeDiffs) : 0;
-    const stdTime = timeDiffs.length > 1 ? std(timeDiffs) : 0;
+    // Time analysis — use pre-calculated Time_Diff_Sec
+    const avgTime = g.timeDiffSecs.length ? mean(g.timeDiffSecs) : 0;
+    const stdTime = g.timeDiffSecs.length > 1 ? std(g.timeDiffSecs) : 0;
     const timeCV  = avgTime > 0 ? stdTime / avgTime : 0;
 
     // Online time
+    g.times.sort();
     let onlineHrs = 0;
     if (g.times.length >= 2) {
       onlineHrs = (new Date(g.times[g.times.length-1]) - new Date(g.times[0])) / 3600000;
     }
 
     // Find baseline from Risk_Result for this player+game
-    const baseline = resultData.find(b => b.player_id === g.player_id && b.GameType === g.GameType);
-    const baseRTP     = baseline ? parseFloat(baseline.RTP)     || 0 : 0;
-    const baseAvgBet  = baseline ? parseFloat(baseline.Avg_Bet) || 0 : 0;
-    const baseBetCV   = baseline ? parseFloat(baseline.Bet_CV)  || 0 : 0;
+    const baseline   = resultData.find(b => b.player_id === g.player_id && b.GameType === g.GameType);
+    const baseRTP    = baseline ? parseFloat(baseline.RTP)     || 0 : 0;
+    const baseAvgBet = baseline ? parseFloat(baseline.Avg_Bet) || 0 : 0;
 
-    // Risk score — compare period vs baseline when available
+    // Risk score — fully based on selected date range data
     let score = 0;
     if (rtp > 95) score += 20;
-    if (baseline && rtp > baseRTP + 2) score += 15;   // RTP much higher than baseline
     if (betCV < 0.1) score += 15;
-    if (baseline && baseBetCV > 0 && betCV < baseBetCV * 0.5) score += 10; // bet pattern more rigid than usual
     if (timeCV < 0.1 && timeCV > 0) score += 15;
     if (avgBet > 5000) score += 10;
-    if (baseline && baseAvgBet > 0 && avgBet > baseAvgBet * 1.5) score += 10; // betting much more than usual
+    if (tableCount > 10) score += 10;
     if (count > 200) score += 10;
     if (totalBet > 0 && Math.abs(totalWL / totalBet) > 0.3) score += 20;
+    // Baseline comparison bonus
+    if (baseline && rtp > baseRTP + 2) score += 5;
+    if (baseline && baseAvgBet > 0 && avgBet > baseAvgBet * 1.5) score += 5;
 
     const flag = score > 75 ? 'CRITICAL' : score > 55 ? 'HIGH' : score > 30 ? 'MEDIUM' : 'LOW';
 
