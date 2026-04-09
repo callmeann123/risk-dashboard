@@ -134,6 +134,8 @@
 
   .sync-btn:hover { background: var(--accent); color: #000; }
   .sync-btn.loading { opacity: 0.5; pointer-events: none; }
+  .sync-btn.live-on { border-color: var(--critical); color: var(--critical); animation: livePulse 2s infinite; }
+  @keyframes livePulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
 
   .spin { animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -487,6 +489,17 @@
       </svg>
       SYNC
     </button>
+    <button class="sync-btn" id="liveBtn" onclick="toggleLive()" style="border-color:var(--muted);color:var(--muted)">
+      <svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="currentColor"/></svg>
+      LIVE OFF
+    </button>
+    <select id="liveInterval" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:6px 8px;border-radius:6px;font-family:var(--font-mono);font-size:0.7rem;outline:none;">
+      <option value="1">1 min</option>
+      <option value="3">3 min</option>
+      <option value="5" selected>5 min</option>
+      <option value="10">10 min</option>
+      <option value="30">30 min</option>
+    </select>
   </div>
 </header>
 
@@ -556,6 +569,8 @@
 <script>
 // ── CONFIG ──────────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'riskctl_sheet_url';
+let liveTimer = null;
+let isLive = false;
 const STORAGE_KEY2 = 'riskctl_result_url';
 const DEFAULT_RESULT_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ6PXnu6BL8v6CwakQhbz4ydApbpSov_9pQpwO0T_YmW3CWP1Uu4HEiT41eOPyrxQ/pub?gid=603586432&single=true&output=csv';
 let rawData = [];
@@ -629,6 +644,34 @@ function updateDateRange(period) {
 }
 
 // ── LOAD DATA ────────────────────────────────────────────────────────────────
+function toggleLive() {
+  const btn = document.getElementById('liveBtn');
+  const interval = parseInt(document.getElementById('liveInterval').value) * 60 * 1000;
+  if (isLive) {
+    clearInterval(liveTimer);
+    liveTimer = null;
+    isLive = false;
+    btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="currentColor"/></svg> LIVE OFF';
+    btn.style.borderColor = 'var(--muted)';
+    btn.style.color = 'var(--muted)';
+    btn.classList.remove('live-on');
+    setStatus('ok', 'Live mode off');
+  } else {
+    const url = localStorage.getItem(STORAGE_KEY);
+    const url2 = localStorage.getItem(STORAGE_KEY2) || DEFAULT_RESULT_URL;
+    if (!url) { setStatus('error', 'Connect data source first'); return; }
+    isLive = true;
+    btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="currentColor"/></svg> LIVE ON';
+    btn.style.borderColor = 'var(--critical)';
+    btn.style.color = 'var(--critical)';
+    btn.classList.add('live-on');
+    // Sync immediately then on interval
+    loadData(url, url2);
+    liveTimer = setInterval(() => loadData(url, url2), interval);
+    setStatus('ok', `Live mode on — syncing every ${document.getElementById('liveInterval').value} min`);
+  }
+}
+
 function saveAndSync() {
   const url = document.getElementById('sheetUrl').value.trim();
   const url2 = document.getElementById('resultUrl').value.trim() || DEFAULT_RESULT_URL;
@@ -708,7 +751,10 @@ async function loadData(url, url2) {
         rawData = results.data.filter(r => r.player_id && r.player_id.trim());
         document.getElementById('setupPanel').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';
-        document.getElementById('lastSync').textContent = 'Last sync: ' + new Date().toLocaleTimeString();
+        const now = new Date();
+        const nextMin = isLive ? parseInt(document.getElementById('liveInterval').value) : null;
+        const nextStr = nextMin ? `  |  Next sync: ${new Date(now.getTime()+nextMin*60000).toLocaleTimeString()}` : '';
+        document.getElementById('lastSync').textContent = 'Last sync: ' + now.toLocaleTimeString() + nextStr;
         setStatus('ok', `Loaded ${rawData.length.toLocaleString()} records`);
         renderAll();
         // Fetch Risk_Result baseline separately after rendering
