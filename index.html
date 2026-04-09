@@ -573,10 +573,12 @@ function aggregate(data){
   const map={};
   data.forEach(r=>{
     const key=`${r.player_id}||${r.GameType}`;
-    if(!map[key]) map[key]={player_id:r.player_id,GameType:r.GameType,bets:[],winlosses:[],times:[],timeDiffSecs:[],tableIds:new Set(),hourCounts:new Array(24).fill(0)};
+    if(!map[key]) map[key]={player_id:r.player_id,GameType:r.GameType,bets:[],validBets:[],winlosses:[],times:[],timeDiffSecs:[],tableIds:new Set(),hourCounts:new Array(24).fill(0)};
     const bet=parseFloat(r.Bet_Amount)||0;
+    const validBet=parseFloat(r.Valid_Bet_Amount)||parseFloat(r.Bet_Amount)||0;
     const wl=parseFloat(r.WinLoss)||0;
     map[key].bets.push(bet);
+    map[key].validBets.push(validBet);
     map[key].winlosses.push(wl);
     if(r.Bet_Time){
       map[key].times.push(r.Bet_Time);
@@ -590,12 +592,13 @@ function aggregate(data){
 
   return Object.values(map).map(g=>{
     const totalBet=g.bets.reduce((a,b)=>a+b,0);
+    const totalValidBet=g.validBets.reduce((a,b)=>a+b,0);
     const totalWL=g.winlosses.reduce((a,b)=>a+b,0);
     const count=g.bets.length;
     const avgBet=totalBet/count;
     const stdBet=std(g.bets);
     const betCV=avgBet>0?stdBet/avgBet:0;
-    const rtp=totalBet>0?(totalBet+totalWL)/totalBet*100:0;
+    const rtp=totalValidBet>0?(totalValidBet+totalWL)/totalValidBet*100:0;
     const tableCount=g.tableIds.size;
     const avgTime=g.timeDiffSecs.length?mean(g.timeDiffSecs):0;
     const stdTime=g.timeDiffSecs.length>1?std(g.timeDiffSecs):0;
@@ -635,7 +638,7 @@ function aggregate(data){
     if(totalWL<-totalBet*.5) patterns.push('Loss Chasing');
     if(rtp>98) patterns.push('Near-Perfect RTP');
 
-    return {player_id:g.player_id,GameType:g.GameType,totalBet,totalWL,count,avgBet,stdBet,betCV,rtp,avgTime,stdTime,timeCV,onlineHrs,tableCount,score,flag,riskType,patterns:patterns.join(', '),hourCounts:g.hourCounts,times:g.times,bets:g.bets};
+    return {player_id:g.player_id,GameType:g.GameType,totalBet,totalValidBet,totalWL,count,avgBet,stdBet,betCV,rtp,avgTime,stdTime,timeCV,onlineHrs,tableCount,score,flag,riskType,patterns:patterns.join(', '),hourCounts:g.hourCounts,times:g.times,bets:g.bets};
   }).sort((a,b)=>b.score-a.score);
 }
 
@@ -829,6 +832,7 @@ const COLS=[
   {key:'player_id',label:'Player',cls:'td-player'},
   {key:'GameType',label:'Game'},
   {key:'totalBet',label:'Total Bet',num:true,fmt:v=>'$'+v.toLocaleString('en',{maximumFractionDigits:0})},
+  {key:'totalValidBet',label:'Valid Bet',num:true,fmt:v=>'$'+v.toLocaleString('en',{maximumFractionDigits:0})},
   {key:'totalWL',label:'Win/Loss',num:true,fmt:v=>(v>=0?'+':'')+v.toLocaleString('en',{maximumFractionDigits:0}),signed:true},
   {key:'count',label:'Bet Count',num:true,fmt:v=>v.toLocaleString()},
   {key:'rtp',label:'RTP%',num:true,fmt:v=>v.toFixed(2)+'%'},
@@ -889,6 +893,7 @@ function openPlayerModal(playerId, gameType){
 
   const stats=[
     {label:'Total Bet',value:'$'+r.totalBet.toLocaleString(),color:r.totalBet>1e6?'var(--high)':'var(--text)'},
+    {label:'Valid Bet',value:'$'+(r.totalValidBet||0).toLocaleString(),color:'var(--text)'},
     {label:'Win/Loss',value:(r.totalWL>=0?'+':'')+r.totalWL.toLocaleString(),color:r.totalWL>=0?'var(--low)':'var(--critical)'},
     {label:'RTP',value:r.rtp.toFixed(2)+'%',color:r.rtp>T.rtp?'var(--critical)':'var(--text)'},
     {label:'Bet Count',value:r.count.toLocaleString(),color:'var(--text)'},
