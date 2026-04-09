@@ -664,7 +664,12 @@ async function loadData(url) {
 
     if (!csv) throw new Error('All proxies failed');
 
-    Papa.parse(csv, {
+    // Find the real header row (the one containing 'player_id')
+    const lines = csv.split('\n');
+    const headerIdx = lines.findIndex(l => l.includes('player_id'));
+    const cleanCsv = headerIdx > 0 ? lines.slice(headerIdx).join('\n') : csv;
+
+    Papa.parse(cleanCsv, {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
