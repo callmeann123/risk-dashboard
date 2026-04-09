@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 
   :root {
     --bg: #0a0e1a;
@@ -22,7 +22,7 @@
     --low: #06d6a0;
     --text: #e2e8f0;
     --muted: #64748b;
-    --font-mono: 'Space Mono', monospace;
+    --font-mono: 'Inter', sans-serif;
     --font-body: 'DM Sans', sans-serif;
   }
 
@@ -170,21 +170,23 @@
   .kpi-card:hover { border-color: var(--accent-color, var(--accent)); }
 
   .kpi-label {
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--muted);
-    font-family: var(--font-mono);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
     margin-bottom: 0.5rem;
   }
 
   .kpi-value {
-    font-family: var(--font-mono);
-    font-size: 1.8rem;
+    font-family: 'Inter', sans-serif;
+    font-size: 2rem;
     font-weight: 700;
     color: var(--accent-color, var(--text));
     line-height: 1;
     margin-bottom: 0.25rem;
+    letter-spacing: -0.02em;
   }
 
   .kpi-sub { font-size: 0.75rem; color: var(--muted); }
@@ -276,7 +278,7 @@
 
   thead th {
     background: var(--surface2);
-    padding: 11px 14px;
+    padding: 11px 20px;
     text-align: left;
     font-family: var(--font-body);
     font-size: 0.8rem;
@@ -301,11 +303,12 @@
   tbody tr:last-child { border-bottom: none; }
 
   td {
-    padding: 12px 14px;
+    padding: 12px 20px;
     white-space: nowrap;
     font-family: var(--font-body);
     font-size: 0.95rem;
     color: var(--text);
+    letter-spacing: 0.01em;
   }
 
   .td-player { color: var(--accent); font-weight: 600; font-size: 0.95rem; }
