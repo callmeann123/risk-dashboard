@@ -706,23 +706,24 @@ async function loadData(url, url2) {
       skipEmptyLines: true,
       complete: (results) => {
         rawData = results.data.filter(r => r.player_id && r.player_id.trim());
-        // Also fetch Risk_Result baseline
-        if (url2) {
-          try {
-            const csv2 = await fetchCSV(url2);
-            if (csv2) {
-              Papa.parse(csv2, {
-                header: true, skipEmptyLines: true,
-                complete: (r2) => { resultData = r2.data.filter(r => r.player_id && r.player_id.trim()); }
-              });
-            }
-          } catch(e) { resultData = []; }
-        }
         document.getElementById('setupPanel').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';
         document.getElementById('lastSync').textContent = 'Last sync: ' + new Date().toLocaleTimeString();
         setStatus('ok', `Loaded ${rawData.length.toLocaleString()} records`);
         renderAll();
+        // Fetch Risk_Result baseline separately after rendering
+        if (url2) {
+          fetchCSV(url2).then(csv2 => {
+            if (!csv2) return;
+            Papa.parse(csv2, {
+              header: true, skipEmptyLines: true,
+              complete: (r2) => {
+                resultData = r2.data.filter(r => r.player_id && r.player_id.trim());
+                renderAll(); // re-render with baseline data
+              }
+            });
+          }).catch(() => { resultData = []; });
+        }
       },
       error: () => setStatus('error', 'Failed to parse CSV — check column headers')
     });
