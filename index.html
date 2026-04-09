@@ -500,15 +500,16 @@
   <!-- Setup panel shown initially -->
   <div class="setup-panel" id="setupPanel">
     <h2>// CONNECT DATA SOURCE</h2>
-    <p>Paste your Google Sheets published CSV URL below.<br>
-    The sheet will auto-sync when you click SYNC.</p>
-    <input class="setup-input" id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv" />
-    <br>
+    <p>Paste your Google Sheets published CSV URLs below.</p>
+    <div style="text-align:left;margin-bottom:0.5rem;font-size:0.75rem;color:var(--muted);font-family:var(--font-mono)">RAW_DATA URL</div>
+    <input class="setup-input" id="sheetUrl" placeholder="Raw_Data CSV URL" />
+    <div style="text-align:left;margin:0.75rem 0 0.5rem;font-size:0.75rem;color:var(--muted);font-family:var(--font-mono)">RISK_RESULT URL</div>
+    <input class="setup-input" id="resultUrl" placeholder="Risk_Result CSV URL" />
+    <br><br>
     <button class="setup-btn" onclick="saveAndSync()">CONNECT & SYNC</button>
     <div class="setup-note">
       In Google Sheets: <code>File → Share → Publish to web</code><br>
-      Select your <code>Raw_Data</code> sheet → <code>CSV</code> → <code>Publish</code><br>
-      Copy the URL and paste above.
+      Publish both <code>Raw_Data</code> and <code>Risk_Result</code> as <code>CSV</code>
     </div>
   </div>
 
@@ -555,7 +556,10 @@
 <script>
 // ── CONFIG ──────────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'riskctl_sheet_url';
+const STORAGE_KEY2 = 'riskctl_result_url';
+const DEFAULT_RESULT_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ6PXnu6BL8v6CwakQhbz4ydApbpSov_9pQpwO0T_YmW3CWP1Uu4HEiT41eOPyrxQ/pub?gid=603586432&single=true&output=csv';
 let rawData = [];
+let resultData = []; // Risk_Result baseline data
 let filteredData = [];
 let aggregated = [];
 let charts = {};
@@ -573,9 +577,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Load saved URL
   const saved = localStorage.getItem(STORAGE_KEY);
+  const saved2 = localStorage.getItem(STORAGE_KEY2) || DEFAULT_RESULT_URL;
   if (saved) {
     document.getElementById('sheetUrl').value = saved;
-    loadData(saved);
+    document.getElementById('resultUrl').value = saved2;
+    loadData(saved, saved2);
   }
 
   // Period tabs
@@ -592,7 +598,8 @@ window.addEventListener('DOMContentLoaded', () => {
   // Sync button
   document.getElementById('syncBtn').addEventListener('click', () => {
     const url = document.getElementById('sheetUrl').value.trim();
-    if (url) { localStorage.setItem(STORAGE_KEY, url); loadData(url); }
+    const url2 = document.getElementById('resultUrl').value.trim() || DEFAULT_RESULT_URL;
+    if (url) { localStorage.setItem(STORAGE_KEY, url); localStorage.setItem(STORAGE_KEY2, url2); loadData(url, url2); }
   });
 
   // Date change
@@ -624,9 +631,11 @@ function updateDateRange(period) {
 // ── LOAD DATA ────────────────────────────────────────────────────────────────
 function saveAndSync() {
   const url = document.getElementById('sheetUrl').value.trim();
+  const url2 = document.getElementById('resultUrl').value.trim() || DEFAULT_RESULT_URL;
   if (!url) return;
   localStorage.setItem(STORAGE_KEY, url);
-  loadData(url);
+  localStorage.setItem(STORAGE_KEY2, url2);
+  loadData(url, url2);
 }
 
 function setStatus(type, text) {
@@ -635,7 +644,24 @@ function setStatus(type, text) {
   document.getElementById('statusText').textContent = text;
 }
 
-async function loadData(url) {
+async function fetchCSV(url) {
+  const proxies = [
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
+    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+  ];
+  for (let i = 0; i < proxies.length; i++) {
+    try {
+      const res = await fetch(proxies[i](url));
+      if (!res.ok) continue;
+      let text = proxies[i](url).includes('allorigins') ? (await res.json()).contents : await res.text();
+      if (text && text.includes('player_id')) return text;
+    } catch(e) { continue; }
+  }
+  return null;
+}
+
+async function loadData(url, url2) {
   setStatus('loading', 'Syncing from Google Sheets...');
   const btn = document.getElementById('syncBtn');
   btn.classList.add('loading');
@@ -680,6 +706,18 @@ async function loadData(url) {
       skipEmptyLines: true,
       complete: (results) => {
         rawData = results.data.filter(r => r.player_id && r.player_id.trim());
+        // Also fetch Risk_Result baseline
+        if (url2) {
+          try {
+            const csv2 = await fetchCSV(url2);
+            if (csv2) {
+              Papa.parse(csv2, {
+                header: true, skipEmptyLines: true,
+                complete: (r2) => { resultData = r2.data.filter(r => r.player_id && r.player_id.trim()); }
+              });
+            }
+          } catch(e) { resultData = []; }
+        }
         document.getElementById('setupPanel').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';
         document.getElementById('lastSync').textContent = 'Last sync: ' + new Date().toLocaleTimeString();
@@ -756,12 +794,21 @@ function aggregate(data) {
       onlineHrs = (new Date(g.times[g.times.length-1]) - new Date(g.times[0])) / 3600000;
     }
 
-    // Risk score
+    // Find baseline from Risk_Result for this player+game
+    const baseline = resultData.find(b => b.player_id === g.player_id && b.GameType === g.GameType);
+    const baseRTP     = baseline ? parseFloat(baseline.RTP)     || 0 : 0;
+    const baseAvgBet  = baseline ? parseFloat(baseline.Avg_Bet) || 0 : 0;
+    const baseBetCV   = baseline ? parseFloat(baseline.Bet_CV)  || 0 : 0;
+
+    // Risk score — compare period vs baseline when available
     let score = 0;
     if (rtp > 95) score += 20;
+    if (baseline && rtp > baseRTP + 2) score += 15;   // RTP much higher than baseline
     if (betCV < 0.1) score += 15;
+    if (baseline && baseBetCV > 0 && betCV < baseBetCV * 0.5) score += 10; // bet pattern more rigid than usual
     if (timeCV < 0.1 && timeCV > 0) score += 15;
     if (avgBet > 5000) score += 10;
+    if (baseline && baseAvgBet > 0 && avgBet > baseAvgBet * 1.5) score += 10; // betting much more than usual
     if (count > 200) score += 10;
     if (totalBet > 0 && Math.abs(totalWL / totalBet) > 0.3) score += 20;
 
@@ -773,6 +820,8 @@ function aggregate(data) {
     else if (avgTime < 60 && timeCV < 0.1 && timeCV > 0) riskType = 'Bot/Automation';
     else if (avgBet > 5000 && betCV < 0.15 && Math.abs(totalWL) < totalBet * 0.05) riskType = 'Money Laundering';
     else if (totalWL < -totalBet * 0.5) riskType = 'Problem Gambling';
+    else if (baseline && rtp > baseRTP + 3) riskType = 'RTP Spike vs Baseline';
+    else if (baseline && baseAvgBet > 0 && avgBet > baseAvgBet * 2) riskType = 'Bet Surge vs Baseline';
 
     // Bet pattern
     const patterns = [];
