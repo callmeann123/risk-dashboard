@@ -715,8 +715,7 @@ function aggregate(data){
     g.times.sort();
     const onlineHrs=g.times.length>=2?(new Date(g.times[g.times.length-1])-new Date(g.times[0]))/3600000:0;
 
-    const baseRTP=baseline?parseFloat(baseline.RTP)||0:0;
-    const baseAvgBet=baseline?parseFloat(baseline.Avg_Bet)||0:0;
+
 
     let baseScore=0;
     if(rtp>T.rtp) baseScore+=20;
