@@ -25,10 +25,7 @@ header{border-bottom:1px solid var(--border);padding:0 1.5rem;display:flex;align
 .logo{font-family:var(--font-mono);font-size:0.85rem;color:var(--accent);letter-spacing:.15em;text-transform:uppercase;}
 .logo span{color:var(--muted);}
 .header-right{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;}
-.period-tabs{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:3px;gap:2px;}
-.period-tab{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.1em;padding:5px 14px;border-radius:6px;border:none;cursor:pointer;background:transparent;color:var(--muted);transition:all .2s;}
-.period-tab.active{background:var(--accent);color:#000;font-weight:700;}
-.period-tab:hover:not(.active){color:var(--text);}
+
 .date-picker{display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--muted);}
 .date-picker input{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-family:var(--font-mono);font-size:.75rem;outline:none;}
 .date-picker input:focus{border-color:var(--accent);}
@@ -164,11 +161,7 @@ td{padding:11px 20px;white-space:nowrap;font-family:var(--font-body);font-size:.
 <header>
   <div class="logo">RISK<span>/</span>CONTROL <span>// DASHBOARD v2</span></div>
   <div class="header-right">
-    <div class="period-tabs">
-      <button class="period-tab active" data-period="day">DAY</button>
-      <button class="period-tab" data-period="week">WEEK</button>
-      <button class="period-tab" data-period="month">MONTH</button>
-    </div>
+
     <select class="ctrl" id="monthSelector" onchange="switchMonth()" style="max-width:130px">
       <option value="">— Select Month —</option>
     </select>
@@ -409,7 +402,7 @@ const STORAGE_KEY = 'riskctl_sheet_url';
 
 let rawData=[], filteredData=[], aggregated=[];
 let charts={};
-let currentPeriod='day', currentPage=1;
+let currentPage=1;
 const PAGE_SIZE=20;
 let liveTimer=null, countdownTimer=null, isLive=false, liveSeconds=0, liveCountdown=0;
 let prevCriticalIds=new Set();
@@ -439,15 +432,7 @@ window.addEventListener('DOMContentLoaded', () => {
   renderMonthList();
   updateMonthSelector();
 
-  document.querySelectorAll('.period-tab').forEach(tab=>{
-    tab.addEventListener('click',()=>{
-      document.querySelectorAll('.period-tab').forEach(t=>t.classList.remove('active'));
-      tab.classList.add('active');
-      currentPeriod=tab.dataset.period;
-      updateDateRange(currentPeriod);
-      renderAll();
-    });
-  });
+
 
   document.getElementById('syncBtn').addEventListener('click',()=>{
     const url=localStorage.getItem(STORAGE_KEY)||document.getElementById('sheetUrl').value.trim();
@@ -459,14 +444,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function fmt(d){return d.toISOString().split('T')[0];}
-function updateDateRange(p){
-  const today=new Date(), from=new Date(today);
-  if(p==='day') from.setDate(from.getDate()-1);
-  else if(p==='week') from.setDate(from.getDate()-7);
-  else from.setMonth(from.getMonth()-1);
-  document.getElementById('dateFrom').value=fmt(from);
-  document.getElementById('dateTo').value=fmt(today);
-}
+
 
 // ── LIVE MODE ────────────────────────────────────────────────────────────────
 // ── MONTH URL MANAGEMENT ─────────────────────────────────────────────────────
