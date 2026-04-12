@@ -138,6 +138,14 @@ td{padding:11px 20px;white-space:nowrap;font-family:var(--font-body);font-size:.
 .setting-input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:5px 10px;border-radius:6px;font-family:var(--font-mono);font-size:.8rem;outline:none;width:90px;text-align:right;}
 .setting-input:focus{border-color:var(--accent);}
 .apply-btn{width:100%;background:var(--accent);color:#000;border:none;padding:10px;border-radius:8px;font-family:var(--font-mono);font-size:.8rem;font-weight:700;cursor:pointer;margin-top:.5rem;}
+.month-item{display:flex;align-items:center;gap:.5rem;padding:.5rem .6rem;background:var(--surface2);border-radius:6px;margin-bottom:.4rem;cursor:pointer;border:1px solid transparent;transition:all .15s;}
+.month-item:hover{border-color:var(--accent);}
+.month-item.active{border-color:var(--accent);background:rgba(0,212,255,.08);}
+.month-label{font-size:.8rem;flex:1;color:var(--text);}
+.month-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);}
+.month-item.active .month-dot{background:var(--accent);}
+.month-del{color:var(--muted);font-size:.75rem;cursor:pointer;padding:2px 6px;border-radius:4px;}
+.month-del:hover{color:var(--critical);}
 /* ALERT BANNER */
 .alert-banner{background:rgba(255,59,92,.1);border:1px solid rgba(255,59,92,.3);border-radius:8px;padding:.75rem 1rem;margin-bottom:.75rem;display:none;align-items:center;gap:.75rem;}
 .alert-banner.show{display:flex;}
@@ -161,6 +169,9 @@ td{padding:11px 20px;white-space:nowrap;font-family:var(--font-body);font-size:.
       <button class="period-tab" data-period="week">WEEK</button>
       <button class="period-tab" data-period="month">MONTH</button>
     </div>
+    <select class="ctrl" id="monthSelector" onchange="switchMonth()" style="max-width:130px">
+      <option value="">— Select Month —</option>
+    </select>
     <div class="date-picker">
       <span>FROM</span><input type="date" id="dateFrom">
       <span>TO</span><input type="date" id="dateTo">
@@ -206,8 +217,7 @@ td{padding:11px 20px;white-space:nowrap;font-family:var(--font-body);font-size:.
     <p>Paste your Google Sheets published CSV URLs below.</p>
     <div style="text-align:left;margin-bottom:.4rem;font-size:.72rem;color:var(--muted);font-family:var(--font-mono)">RAW_DATA URL</div>
     <input class="setup-input" id="sheetUrl" placeholder="Raw_Data CSV URL"/>
-    <div style="text-align:left;margin:.5rem 0 .4rem;font-size:.72rem;color:var(--muted);font-family:var(--font-mono)">RISK_RESULT URL</div>
-    <input class="setup-input" id="resultUrl" placeholder="Risk_Result CSV URL"/>
+
     <br>
     <button class="setup-btn" onclick="saveAndSync()">CONNECT & SYNC</button>
     <div class="setup-note">
@@ -368,18 +378,21 @@ td{padding:11px 20px;white-space:nowrap;font-family:var(--font-body);font-size:.
     </div>
 
     <div class="settings-section">
-      <h3>Data Source URLs</h3>
-      <div style="margin-bottom:.5rem">
-        <div class="setting-label" style="margin-bottom:.35rem;font-size:.72rem">RAW_DATA</div>
-        <input class="setup-input" id="s_rawUrl" style="margin:0;font-size:.72rem">
+      <h3>Monthly Data Sources</h3>
+      <div style="font-size:.72rem;color:var(--muted);margin-bottom:.75rem;line-height:1.6">
+        Add each month's Raw_Data CSV URL here. Switch months from the top dropdown.
       </div>
-      <div>
-        <div class="setting-label" style="margin-bottom:.35rem;font-size:.72rem">RISK_RESULT</div>
-        <input class="setup-input" id="s_resultUrl" style="margin:0;font-size:.72rem">
+      <div id="monthUrlList" style="margin-bottom:.75rem"></div>
+      <div style="border-top:1px solid var(--border);padding-top:.75rem;margin-top:.25rem">
+        <div style="font-size:.72rem;color:var(--accent);font-family:var(--font-mono);margin-bottom:.5rem">+ ADD NEW MONTH</div>
+        <input class="setup-input" id="newMonthLabel" placeholder="Month name (e.g. Jan 2026)" style="margin-bottom:.4rem;font-size:.75rem">
+        <input class="setup-input" id="s_rawUrl" placeholder="Raw_Data CSV URL" style="margin-bottom:.4rem;font-size:.75rem">
+
+        <button class="icon-btn" style="width:100%;justify-content:center" onclick="addMonthUrl()">+ ADD MONTH</button>
       </div>
     </div>
 
-    <button class="apply-btn" onclick="applySettings()">APPLY & SYNC</button>
+    <button class="apply-btn" onclick="applySettings()">APPLY SETTINGS</button>
   </div>
 </div>
 
@@ -391,11 +404,10 @@ td{padding:11px 20px;white-space:nowrap;font-family:var(--font-body);font-size:.
 
 <script>
 // ── CONFIG ──────────────────────────────────────────────────────────────────
-const STORAGE_KEY  = 'riskctl_sheet_url';
-const STORAGE_KEY2 = 'riskctl_result_url';
-const DEFAULT_RESULT_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ6PXnu6BL8v6CwakQhbz4ydApbpSov_9pQpwO0T_YmW3CWP1Uu4HEiT41eOPyrxQ/pub?gid=603586432&single=true&output=csv';
+const STORAGE_KEY = 'riskctl_sheet_url';
 
-let rawData=[], resultData=[], filteredData=[], aggregated=[];
+
+let rawData=[], filteredData=[], aggregated=[];
 let charts={};
 let currentPeriod='day', currentPage=1;
 const PAGE_SIZE=20;
@@ -417,20 +429,14 @@ window.addEventListener('DOMContentLoaded', () => {
   // Read URL params first (shareable links)
   const params=new URLSearchParams(window.location.search);
   const paramRaw=params.get('raw');
-  const paramResult=params.get('result');
-
   const saved=paramRaw||localStorage.getItem(STORAGE_KEY);
-  const saved2=paramResult||localStorage.getItem(STORAGE_KEY2)||DEFAULT_RESULT_URL;
-
   if(saved){
     localStorage.setItem(STORAGE_KEY,saved);
-    localStorage.setItem(STORAGE_KEY2,saved2);
     document.getElementById('sheetUrl').value=saved;
-    document.getElementById('resultUrl').value=saved2;
-    document.getElementById('s_rawUrl').value=saved;
-    document.getElementById('s_resultUrl').value=saved2;
-    loadData(saved,saved2);
+    loadData(saved);
   }
+  renderMonthList();
+  updateMonthSelector();
 
   document.querySelectorAll('.period-tab').forEach(tab=>{
     tab.addEventListener('click',()=>{
@@ -443,9 +449,8 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('syncBtn').addEventListener('click',()=>{
-    const url=document.getElementById('sheetUrl').value.trim();
-    const url2=document.getElementById('resultUrl').value.trim()||DEFAULT_RESULT_URL;
-    if(url){localStorage.setItem(STORAGE_KEY,url);localStorage.setItem(STORAGE_KEY2,url2);loadData(url,url2);}
+    const url=localStorage.getItem(STORAGE_KEY)||document.getElementById('sheetUrl').value.trim();
+    if(url) loadData(url);
   });
 
   ['dateFrom','dateTo'].forEach(id=>document.getElementById(id).addEventListener('change',renderAll));
@@ -463,6 +468,86 @@ function updateDateRange(p){
 }
 
 // ── LIVE MODE ────────────────────────────────────────────────────────────────
+// ── MONTH URL MANAGEMENT ─────────────────────────────────────────────────────
+const MONTHS_KEY = 'riskctl_months';
+
+function getMonths(){
+  try { return JSON.parse(localStorage.getItem('riskctl_months'))||[]; }
+  catch(e){ return []; }
+}
+
+function saveMonths(months){
+  localStorage.setItem('riskctl_months', JSON.stringify(months));
+}
+
+function addMonthUrl(){
+  const label = document.getElementById('newMonthLabel').value.trim();
+  const raw   = document.getElementById('s_rawUrl').value.trim();
+  if(!label||!raw){ alert('Please fill in Month name and RAW_DATA URL'); return; }
+  const months = getMonths();
+  const existing = months.findIndex(m=>m.label===label);
+  if(existing>=0) months[existing]={label,raw};
+  else months.push({label,raw});
+  saveMonths(months);
+  renderMonthList();
+  updateMonthSelector();
+  document.getElementById('newMonthLabel').value='';
+  showNotif(`Month "${label}" saved!`);
+  document.getElementById('notifPopup').querySelector('.notif-title').textContent='✅ SAVED';
+  document.getElementById('notifPopup').querySelector('.notif-title').style.color='var(--low)';
+}
+
+function deleteMonth(label){
+  const months=getMonths().filter(m=>m.label!==label);
+  saveMonths(months);
+  renderMonthList();
+  updateMonthSelector();
+}
+
+function switchToMonth(label){
+  const months=getMonths();
+  const m=months.find(m=>m.label===label);
+  if(!m) return;
+  localStorage.setItem(STORAGE_KEY, m.raw);
+  document.getElementById('sheetUrl').value=m.raw;
+  document.getElementById('s_rawUrl').value=m.raw;
+  renderMonthList();
+  updateMonthSelector();
+  loadData(m.raw);
+}
+
+function switchMonth(){
+  const label=document.getElementById('monthSelector').value;
+  if(label) switchToMonth(label);
+}
+
+function renderMonthList(){
+  const months=getMonths();
+  const curRaw=localStorage.getItem(STORAGE_KEY)||'';
+  const list=document.getElementById('monthUrlList');
+  if(!list) return;
+  if(!months.length){
+    list.innerHTML='<div style="font-size:.75rem;color:var(--muted);padding:.5rem 0">No months added yet. Add one below.</div>';
+    return;
+  }
+  list.innerHTML=months.map(m=>`
+    <div class="month-item${m.raw===curRaw?' active':''}" onclick="switchToMonth('${m.label}')">
+      <div class="month-dot"></div>
+      <div class="month-label">${m.label}</div>
+      <div style="font-size:.68rem;color:var(--muted);font-family:var(--font-mono)">${m.raw===curRaw?'● ACTIVE':''}</div>
+      <div class="month-del" onclick="event.stopPropagation();deleteMonth('${m.label}')" title="Remove">✕</div>
+    </div>`).join('');
+}
+
+function updateMonthSelector(){
+  const months=getMonths();
+  const sel=document.getElementById('monthSelector');
+  if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="">— Select Month —</option>'+
+    months.map(m=>`<option value="${m.label}"${m.label===cur?'selected':''}>${m.label}</option>`).join('');
+}
+
 function toggleLive(){
   const btn=document.getElementById('liveBtn');
   if(isLive){
@@ -512,11 +597,9 @@ async function fetchCSV(url){
 
 function saveAndSync(){
   const url=document.getElementById('sheetUrl').value.trim();
-  const url2=document.getElementById('resultUrl').value.trim()||DEFAULT_RESULT_URL;
   if(!url) return;
   localStorage.setItem(STORAGE_KEY,url);
-  localStorage.setItem(STORAGE_KEY2,url2);
-  loadData(url,url2);
+  loadData(url);
 }
 
 function setStatus(type,text){
@@ -525,7 +608,7 @@ function setStatus(type,text){
   document.getElementById('statusText').textContent=text;
 }
 
-async function loadData(url,url2){
+async function loadData(url){
   setStatus('loading','Syncing...');
   const btn=document.getElementById('syncBtn');
   btn.classList.add('loading');
@@ -544,20 +627,6 @@ async function loadData(url,url2){
         document.getElementById('dashboard').style.display='block';
         setStatus('ok',`Loaded ${rawData.length.toLocaleString()} records`);
         renderAll();
-        if(url2){
-          fetchCSV(url2).then(csv2=>{
-            if(!csv2) return;
-            const lines2=csv2.split('\n');
-            const hi=lines2.findIndex(l=>l.includes('player_id'));
-            const clean2=hi>0?lines2.slice(hi).join('\n'):csv2;
-            Papa.parse(clean2,{header:true,skipEmptyLines:true,
-              complete:(r2)=>{
-                resultData=r2.data.filter(r=>r.player_id&&r.player_id.trim());
-                renderAll();
-              }
-            });
-          });
-        }
       }
     });
   }catch(e){
@@ -584,8 +653,8 @@ function getDateFiltered(){
 function aggregate(data){
   const map={};
   data.forEach(r=>{
-    const provider=r.Provider||r.provider||'Unknown';
-    const key=`${r.player_id}||${provider}||${r.GameType}`;
+    const provider=(r.Provider&&r.Provider.trim())||(r.provider&&r.provider.trim())||'';
+    const key=`${r.player_id}||${provider||'_'}||${r.GameType}`;
     if(!map[key]) map[key]={player_id:r.player_id,GameType:r.GameType,provider:provider,bets:[],validBets:[],winlosses:[],times:[],timeDiffSecs:[],tableIds:new Set(),hourCounts:new Array(24).fill(0)};
     const bet=parseFloat(r.Bet_Amount)||0;
     const validBet=parseFloat(r.Valid_Bet_Amount)||0;
@@ -631,10 +700,8 @@ function aggregate(data){
     if(tableCount>T.tablecount) baseScore+=10;
     if(count>T.betcount) baseScore+=10;
     if(totalBet>0&&Math.abs(totalWL/totalBet)>T.wlratio) baseScore+=20;
-    let bonusScore=0;
-    if(baseline&&rtp>baseRTP+2) bonusScore+=5;
-    if(baseline&&baseAvgBet>0&&avgBet>baseAvgBet*1.5) bonusScore+=5;
-    const score=baseScore+bonusScore;
+    const bonusScore=0;
+    const score=baseScore;
 
     const flag=score>T.critical?'CRITICAL':score>T.high?'HIGH':score>T.medium?'MEDIUM':'LOW';
 
@@ -643,8 +710,6 @@ function aggregate(data){
     else if(avgTime<60&&timeCV<T.timecv&&timeCV>0) riskType='Bot/Automation';
     else if(avgBet>T.avgbet&&betCV<.15&&Math.abs(totalWL)<totalBet*.05) riskType='Money Laundering';
     else if(totalWL<-totalBet*.5) riskType='Problem Gambling';
-    else if(baseline&&rtp>baseRTP+3) riskType='RTP Spike vs Baseline';
-    else if(baseline&&baseAvgBet>0&&avgBet>baseAvgBet*2) riskType='Bet Surge vs Baseline';
 
     const patterns=[];
     if(betCV<.05) patterns.push('Flat Betting');
@@ -669,7 +734,7 @@ function renderAll(){
   filteredData=getDateFiltered();
   aggregated=aggregate(filteredData);
   // Populate provider filter
-  const providers=[...new Set(aggregated.map(r=>r.provider).filter(Boolean))].sort();
+  const providers=[...new Set(aggregated.map(r=>r.provider).filter(p=>p&&p.trim()))].sort();
   const pf=document.getElementById('providerFilter');
   const curP=pf.value;
   pf.innerHTML='<option value="">All Providers</option>'+providers.map(p=>`<option value="${p}"${p===curP?'selected':''}>${p}</option>`).join('');
@@ -971,10 +1036,11 @@ function toggleSettings(){
   const el=document.getElementById('settingsOverlay');
   el.classList.toggle('open');
   if(el.classList.contains('open')){
-    const url=localStorage.getItem(STORAGE_KEY)||'';
-    const url2=localStorage.getItem(STORAGE_KEY2)||DEFAULT_RESULT_URL;
-    document.getElementById('s_rawUrl').value=url;
-    document.getElementById('s_resultUrl').value=url2;
+    document.getElementById('s_rawUrl').value='';
+    document.getElementById('s_resultUrl').value='';
+    document.getElementById('newMonthLabel').value='';
+    renderMonthList();
+    updateMonthSelector();
   }
 }
 function closeSettings(e){if(e.target===document.getElementById('settingsOverlay')) toggleSettings();}
@@ -990,12 +1056,8 @@ function applySettings(){
   T.critical=parseFloat(document.getElementById('s_critical').value)||75;
   T.high=parseFloat(document.getElementById('s_high').value)||55;
   T.medium=parseFloat(document.getElementById('s_medium').value)||30;
-  const url=document.getElementById('s_rawUrl').value.trim();
-  const url2=document.getElementById('s_resultUrl').value.trim()||DEFAULT_RESULT_URL;
-  if(url){localStorage.setItem(STORAGE_KEY,url);localStorage.setItem(STORAGE_KEY2,url2);}
   toggleSettings();
   renderAll();
-  if(url) loadData(url,url2);
 }
 
 // ── ALERTS & NOTIFICATIONS ────────────────────────────────────────────────────
@@ -1040,9 +1102,8 @@ function requestNotif(){
 // ── EXPORT ────────────────────────────────────────────────────────────────────
 function shareLink(){
   const url=localStorage.getItem(STORAGE_KEY)||'';
-  const url2=localStorage.getItem(STORAGE_KEY2)||'';
   if(!url){setStatus('error','No data source connected');return;}
-  const shareUrl=`${location.origin}${location.pathname}?raw=${encodeURIComponent(url)}${url2?'&result='+encodeURIComponent(url2):''}`;
+  const shareUrl=`${location.origin}${location.pathname}?raw=${encodeURIComponent(url)}`;
   navigator.clipboard.writeText(shareUrl).then(()=>{
     showNotif('Share link copied to clipboard!');
     document.getElementById('notifText').textContent='Link copied! Share it with your team.';
