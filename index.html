@@ -519,10 +519,12 @@ function switchToMonth(label){
     const mo=monthNames.indexOf(parts[0].toLowerCase().substring(0,3));
     const yr=parseInt(parts[parts.length-1]);
     if(mo>=0&&!isNaN(yr)){
-      const firstDay=new Date(yr,mo,1);
-      const lastDay=new Date(yr,mo+1,0);
-      document.getElementById('dateFrom').value=fmt(firstDay);
-      document.getElementById('dateTo').value=fmt(lastDay);
+      // Use string format directly to avoid timezone issues
+      const moStr=String(mo+1).padStart(2,'0');
+      const lastDay=new Date(yr,mo+1,0).getDate();
+      const lastStr=String(lastDay).padStart(2,'0');
+      document.getElementById('dateFrom').value=`${yr}-${moStr}-01`;
+      document.getElementById('dateTo').value=`${yr}-${moStr}-${lastStr}`;
     }
   } catch(e) {}
   renderMonthList();
