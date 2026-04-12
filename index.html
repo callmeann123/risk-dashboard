@@ -577,8 +577,6 @@ async function fetchCSV(url){
     u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
     u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
     u=>`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-    u=>`https://thingproxy.freeboard.io/fetch/${u}`,
-    u=>`https://jsonp.afeld.me/?url=${encodeURIComponent(u)}`,
   ];
   for(let i=0;i<proxies.length;i++){
     try{
