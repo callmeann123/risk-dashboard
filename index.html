@@ -584,8 +584,9 @@ function getDateFiltered(){
 function aggregate(data){
   const map={};
   data.forEach(r=>{
-    const key=`${r.player_id}||${r.GameType}`;
-    if(!map[key]) map[key]={player_id:r.player_id,GameType:r.GameType,provider:r.Provider||r.provider||'',bets:[],validBets:[],winlosses:[],times:[],timeDiffSecs:[],tableIds:new Set(),hourCounts:new Array(24).fill(0)};
+    const provider=r.Provider||r.provider||'Unknown';
+    const key=`${r.player_id}||${provider}||${r.GameType}`;
+    if(!map[key]) map[key]={player_id:r.player_id,GameType:r.GameType,provider:provider,bets:[],validBets:[],winlosses:[],times:[],timeDiffSecs:[],tableIds:new Set(),hourCounts:new Array(24).fill(0)};
     const bet=parseFloat(r.Bet_Amount)||0;
     const validBet=parseFloat(r.Valid_Bet_Amount)||0;
     const wl=parseFloat(r.WinLoss)||0;
@@ -618,7 +619,7 @@ function aggregate(data){
     g.times.sort();
     const onlineHrs=g.times.length>=2?(new Date(g.times[g.times.length-1])-new Date(g.times[0]))/3600000:0;
 
-    const baseline=resultData.find(b=>b.player_id===g.player_id&&b.GameType===g.GameType);
+    const baseline=resultData.find(b=>b.player_id===g.player_id&&b.GameType===g.GameType&&(!g.provider||!b.Provider||b.Provider===g.provider));
     const baseRTP=baseline?parseFloat(baseline.RTP)||0:0;
     const baseAvgBet=baseline?parseFloat(baseline.Avg_Bet)||0:0;
 
@@ -765,8 +766,9 @@ function renderRiskChart(){
 function renderPlayerChart(){
   const byPlayer={};
   aggregated.forEach(r=>{
-    if(!byPlayer[r.player_id]) byPlayer[r.player_id]=0;
-    byPlayer[r.player_id]+=r.totalBet;
+    const k=r.provider?`${r.player_id} (${r.provider})`:r.player_id;
+    if(!byPlayer[k]) byPlayer[k]=0;
+    byPlayer[k]+=r.totalBet;
   });
   const sorted=Object.entries(byPlayer).sort((a,b)=>b[1]-a[1]).slice(0,10);
   if(charts.player) charts.player.destroy();
@@ -884,7 +886,7 @@ function renderTable(search){
   const total=rows.length, start=(currentPage-1)*PAGE_SIZE, page=rows.slice(start,start+PAGE_SIZE);
   document.getElementById('tableHead').innerHTML=`<tr>${COLS.map(c=>`<th onclick="sortBy('${c.key}')">${c.label}${sortKey===c.key?(sortDir>0?' ▲':' ▼'):''}</th>`).join('')}</tr>`;
   document.getElementById('tableBody').innerHTML=page.length?page.map((r,i)=>`
-    <tr onclick="openPlayerModal('${r.player_id}','${r.GameType}')">${COLS.map(c=>{
+    <tr onclick="openPlayerModal('${r.player_id}','${r.GameType}','${r.provider}')">${COLS.map(c=>{
       let val=r[c.key];
       if(c.badge) return `<td><span class="risk-badge risk-${val}">${val}</span></td>`;
       if(c.key==='score') return `<td class="td-num" style="white-space:nowrap">${r.baseScore}<span style="color:var(--accent);font-size:.72rem;margin-left:4px" title="Base: ${r.baseScore} + Baseline bonus: +${r.bonusScore}">+${r.bonusScore}★</span></td>`;
@@ -908,8 +910,8 @@ function sortBy(key){
 function goPage(p){currentPage=p;renderTable();}
 
 // ── PLAYER MODAL ──────────────────────────────────────────────────────────────
-function openPlayerModal(playerId, gameType){
-  const r=aggregated.find(a=>a.player_id===playerId&&a.GameType===gameType);
+function openPlayerModal(playerId, gameType, provider){
+  const r=aggregated.find(a=>a.player_id===playerId&&a.GameType===gameType&&(!provider||a.provider===provider));
   if(!r) return;
   document.getElementById('modalTitle').textContent=`${playerId} — ${gameType}`;
   document.getElementById('playerModal').classList.add('open');
