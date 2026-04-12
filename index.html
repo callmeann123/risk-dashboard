@@ -583,15 +583,31 @@ async function fetchCSV(url){
     u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
     u=>`https://api.allorigins.win/get?url=${encodeURIComponent(u)}`,
     u=>`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    u=>`https://thingproxy.freeboard.io/fetch/${u}`,
+    u=>`https://jsonp.afeld.me/?url=${encodeURIComponent(u)}`,
   ];
   for(let i=0;i<proxies.length;i++){
     try{
-      const res=await fetch(proxies[i](url));
+      setStatus('loading',`Trying proxy ${i+1}/${proxies.length}...`);
+      const res=await fetch(proxies[i](url),{signal:AbortSignal.timeout(8000)});
       if(!res.ok) continue;
-      let text=proxies[i](url).includes('allorigins')?(await res.json()).contents:await res.text();
+      let text;
+      if(proxies[i](url).includes('allorigins')){
+        const j=await res.json(); text=j.contents;
+      } else {
+        text=await res.text();
+      }
       if(text&&text.includes('player_id')) return text;
     }catch(e){continue;}
   }
+  // Last resort: try direct fetch (works if CORS allows)
+  try{
+    const res=await fetch(url,{signal:AbortSignal.timeout(8000)});
+    if(res.ok){
+      const text=await res.text();
+      if(text&&text.includes('player_id')) return text;
+    }
+  }catch(e){}
   return null;
 }
 
@@ -688,7 +704,6 @@ function aggregate(data){
     g.times.sort();
     const onlineHrs=g.times.length>=2?(new Date(g.times[g.times.length-1])-new Date(g.times[0]))/3600000:0;
 
-    const baseline=resultData.find(b=>b.player_id===g.player_id&&b.GameType===g.GameType&&(!g.provider||!b.Provider||b.Provider===g.provider));
     const baseRTP=baseline?parseFloat(baseline.RTP)||0:0;
     const baseAvgBet=baseline?parseFloat(baseline.Avg_Bet)||0:0;
 
