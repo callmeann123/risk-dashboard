@@ -511,6 +511,17 @@ function switchToMonth(label){
   localStorage.setItem(STORAGE_KEY, m.raw);
   document.getElementById('sheetUrl').value=m.raw;
   document.getElementById('s_rawUrl').value=m.raw;
+  // Try to parse date from label e.g. "Jan 2026" -> set full month range
+  try {
+    const parsed = new Date(m.label+' 01');
+    if(!isNaN(parsed)){
+      const y=parsed.getFullYear(), mo=parsed.getMonth();
+      const firstDay=new Date(y,mo,1);
+      const lastDay=new Date(y,mo+1,0);
+      document.getElementById('dateFrom').value=fmt(firstDay);
+      document.getElementById('dateTo').value=fmt(lastDay);
+    }
+  } catch(e) {}
   renderMonthList();
   updateMonthSelector();
   loadData(m.raw);
