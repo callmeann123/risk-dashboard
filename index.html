@@ -421,10 +421,11 @@ let T = { rtp:95, betcv:.1, timecv:.1, avgbet:5000, tablecount:10, betcount:200,
 
 // ── INIT ────────────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  const today=new Date(), monthAgo=new Date(today);
-  monthAgo.setMonth(monthAgo.getMonth()-1);
-  document.getElementById('dateFrom').value=fmt(monthAgo);
-  document.getElementById('dateTo').value=fmt(today);
+  const today=new Date();
+  const firstOfMonth=new Date(today.getFullYear(),today.getMonth(),1);
+  const lastOfMonth=new Date(today.getFullYear(),today.getMonth()+1,0);
+  document.getElementById('dateFrom').value=fmt(firstOfMonth);
+  document.getElementById('dateTo').value=fmt(lastOfMonth);
 
   // Read URL params first (shareable links)
   const params=new URLSearchParams(window.location.search);
@@ -757,11 +758,7 @@ function std(arr){
 // ── RENDER ALL ────────────────────────────────────────────────────────────────
 function renderAll(){
   filteredData=getDateFiltered();
-  console.log('filteredData length:', filteredData.length);
-  console.log('date from:', document.getElementById('dateFrom').value, 'to:', document.getElementById('dateTo').value);
-  if(filteredData.length>0) console.log('sample row:', JSON.stringify(filteredData[0]));
   aggregated=aggregate(filteredData);
-  console.log('aggregated length:', aggregated.length);
   // Populate provider filter
   const providers=[...new Set(aggregated.map(r=>r.provider).filter(p=>p&&p.trim()))].sort();
   const pf=document.getElementById('providerFilter');
