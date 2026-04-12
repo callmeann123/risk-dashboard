@@ -271,6 +271,9 @@ td{padding:11px 20px;white-space:nowrap;font-family:var(--font-body);font-size:.
           <div style="width:6px;height:6px;border-radius:50%;background:var(--accent)"></div>PLAYER RISK TABLE
         </div>
         <div class="table-actions">
+          <select class="ctrl" id="providerFilter" onchange="renderTable('')">
+            <option value="">All Providers</option>
+          </select>
           <select class="ctrl" id="flagFilter" onchange="renderTable('')">
             <option value="">All Risk Levels</option>
             <option value="CRITICAL">CRITICAL</option>
@@ -582,7 +585,7 @@ function aggregate(data){
   const map={};
   data.forEach(r=>{
     const key=`${r.player_id}||${r.GameType}`;
-    if(!map[key]) map[key]={player_id:r.player_id,GameType:r.GameType,bets:[],validBets:[],winlosses:[],times:[],timeDiffSecs:[],tableIds:new Set(),hourCounts:new Array(24).fill(0)};
+    if(!map[key]) map[key]={player_id:r.player_id,GameType:r.GameType,provider:r.Provider||r.provider||'',bets:[],validBets:[],winlosses:[],times:[],timeDiffSecs:[],tableIds:new Set(),hourCounts:new Array(24).fill(0)};
     const bet=parseFloat(r.Bet_Amount)||0;
     const validBet=parseFloat(r.Valid_Bet_Amount)||0;
     const wl=parseFloat(r.WinLoss)||0;
@@ -649,7 +652,7 @@ function aggregate(data){
     if(totalWL<-totalBet*.5) patterns.push('Loss Chasing');
     if(rtp>98) patterns.push('Near-Perfect RTP');
 
-    return {player_id:g.player_id,GameType:g.GameType,totalBet,totalValidBet,totalWL,count,avgBet,stdBet,betCV,rtp,avgTime,stdTime,timeCV,onlineHrs,tableCount,score,baseScore,bonusScore,flag,riskType,patterns:patterns.join(', '),hourCounts:g.hourCounts,times:g.times,bets:g.bets};
+    return {player_id:g.player_id,GameType:g.GameType,provider:g.provider,totalBet,totalValidBet,totalWL,count,avgBet,stdBet,betCV,rtp,avgTime,stdTime,timeCV,onlineHrs,tableCount,score,baseScore,bonusScore,flag,riskType,patterns:patterns.join(', '),hourCounts:g.hourCounts,times:g.times,bets:g.bets};
   }).sort((a,b)=>b.score-a.score);
 }
 
@@ -664,6 +667,11 @@ function std(arr){
 function renderAll(){
   filteredData=getDateFiltered();
   aggregated=aggregate(filteredData);
+  // Populate provider filter
+  const providers=[...new Set(aggregated.map(r=>r.provider).filter(Boolean))].sort();
+  const pf=document.getElementById('providerFilter');
+  const curP=pf.value;
+  pf.innerHTML='<option value="">All Providers</option>'+providers.map(p=>`<option value="${p}"${p===curP?'selected':''}>${p}</option>`).join('');
   renderKPIs();
   renderTrendChart();
   renderRiskChart();
@@ -842,6 +850,7 @@ function renderHeatmap(){
 const COLS=[
   {key:'player_id',label:'Player',cls:'td-player'},
   {key:'GameType',label:'Game'},
+  {key:'provider',label:'Provider'},
   {key:'totalBet',label:'Total Bet',num:true,fmt:v=>'$'+v.toLocaleString('en',{maximumFractionDigits:0})},
   {key:'totalValidBet',label:'Valid Bet',num:true,fmt:v=>'$'+v.toLocaleString('en',{maximumFractionDigits:0})},
   {key:'totalWL',label:'Win/Loss',num:true,fmt:v=>(v>=0?'+':'')+v.toLocaleString('en',{maximumFractionDigits:0}),signed:true},
@@ -862,8 +871,10 @@ let sortKey='score', sortDir=-1;
 function renderTable(search){
   const q=(search||document.getElementById('tableSearch').value||'').toLowerCase();
   const flagF=document.getElementById('flagFilter').value;
+  const provF=document.getElementById('providerFilter').value;
   let rows=aggregated.filter(r=>
     (!flagF||r.flag===flagF)&&
+    (!provF||r.provider===provF)&&
     (!q||r.player_id.toLowerCase().includes(q)||r.GameType.toLowerCase().includes(q)||r.riskType.toLowerCase().includes(q))
   );
   rows.sort((a,b)=>{
@@ -904,6 +915,7 @@ function openPlayerModal(playerId, gameType){
   document.getElementById('playerModal').classList.add('open');
 
   const stats=[
+    {label:'Provider',value:r.provider||'—',color:'var(--accent)'},
     {label:'Total Bet',value:'$'+r.totalBet.toLocaleString(),color:r.totalBet>1e6?'var(--high)':'var(--text)'},
     {label:'Valid Bet',value:'$'+(r.totalValidBet||0).toLocaleString(),color:'var(--text)'},
     {label:'Win/Loss',value:(r.totalWL>=0?'+':'')+r.totalWL.toLocaleString(),color:r.totalWL>=0?'var(--low)':'var(--critical)'},
